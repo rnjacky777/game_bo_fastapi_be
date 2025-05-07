@@ -1,6 +1,6 @@
 from pydantic import BaseModel, Field
 class MonsterRewardSchema(BaseModel):
-    # id: int
+    drop_id: int
     item_id: int
     probability: float
 

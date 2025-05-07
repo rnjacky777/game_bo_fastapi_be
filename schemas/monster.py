@@ -12,5 +12,9 @@ class MonsterSchema(BaseModel):
 
 
 class AddDropItemSchema(BaseModel):
+    monster_id:int
     item_id: int
     probability: float = Field(..., ge=0.0, le=1.0)
+
+class RemoveDropItemSchema(BaseModel):
+    drop_id:int

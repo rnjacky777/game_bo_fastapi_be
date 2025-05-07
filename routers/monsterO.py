@@ -1,12 +1,12 @@
 from typing import List
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from models import RewardPoolItem
+from models import RewardPoolItem, Item
 from models.monsters import Monster
 from dependencies.db import get_db
-from schemas.monster import AddDropItemSchema, MonsterSchema
-from schemas.reward import RewardPoolItemSchema, RewardPoolSchema, UpdateDropProbabilitySchema
-from schemas.rewarditem import MonsterRewardSchema  # 你可以建立一個 UserOut schema
+from schemas.monster import AddDropItemSchema, MonsterSchema,RemoveDropItemSchema
+from schemas.reward import UpdateDropProbabilitySchema
+from schemas.rewarditem import MonsterRewardSchema 
 
 
 router = APIRouter()
@@ -37,6 +37,7 @@ def get_monster_rewards(monster_id: int, db: Session = Depends(get_db)):
     rewards = []
     for item in monster.drop_pool.items:
         rewards.append(MonsterRewardSchema(
+            drop_id=item.id,
             item_id=item.item_detail.id,
             item_name=item.item_detail.name,
             probability=item.probability
@@ -81,47 +82,43 @@ def update_drop_probability(
     return {"message": "Probability updated successfully", "item_id": item_id, "new_probability": data.probability}
 
 
-# @router.post("/admin/monsters/{monster_id}/drops")
-# def add_monster_drop(monster_id: int, data: AddDropItemSchema, db: Session = Depends(get_db)):
-#     monster = db.query(Monster).filter(Monster.id == monster_id).first()
-#     if not monster or not monster.drop_pool:
-#         raise HTTPException(
-#             status_code=404, detail="Monster or drop pool not found")
+@router.post("/addRewardItem")
+def add_monster_drop(data: AddDropItemSchema, db: Session = Depends(get_db)):
+    monster_id = data.monster_id
+    monster = db.query(Monster).filter(Monster.id == monster_id).first()
+    if not monster or not monster.drop_pool:
+        raise HTTPException(
+            status_code=404, detail="Monster or drop pool not found")
 
-#     # 確認是否已存在相同 item_id
-#     exists = db.query(RewardPoolItem).filter(
-#         RewardPoolItem.pool_id == monster.drop_pool.id,
-#         RewardPoolItem.item_id == data.item_id
-#     ).first()
-#     if exists:
-#         raise HTTPException(
-#             status_code=400, detail="Item already exists in drop pool")
+    # 確認是否已存在相同 item_id
+    exists = db.query(RewardPoolItem).filter(
+        RewardPoolItem.pool_id == monster.drop_pool.id,
+        RewardPoolItem.item_id == data.item_id
+    ).first()
+    if exists:
+        raise HTTPException(
+            status_code=400, detail="Item already exists in drop pool")
 
-#     drop = RewardPoolItem(
-#         pool_id=monster.drop_pool.id,
-#         item_id=data.item_id,
-#         probability=data.probability
-#     )
-#     db.add(drop)
-#     db.commit()
-#     db.refresh(drop)
-#     return {"message": "Drop item added", "drop_id": drop.id}
+    drop = RewardPoolItem(
+        pool_id=monster.drop_pool.id,
+        item_id=data.item_id,
+        probability=data.probability
+    )
+    db.add(drop)
+    db.commit()
+    db.refresh(drop)
+    item_detail = db.query(Item).filter(Item.id == data.item_id).first()
+    return {"message": "Drop item added", "drop_id": drop.id, 'probability': data.probability, 'item_name': item_detail.name,'item_id':item_detail.id}
 
 
-# @router.delete("/admin/monsters/{monster_id}/drops/{item_id}")
-# def delete_monster_drop(monster_id: int, item_id: int, db: Session = Depends(get_db)):
-#     monster = db.query(Monster).filter(Monster.id == monster_id).first()
-#     if not monster or not monster.drop_pool:
-#         raise HTTPException(
-#             status_code=404, detail="Monster or drop pool not found")
-
-#     drop = db.query(RewardPoolItem).filter(
-#         RewardPoolItem.pool_id == monster.drop_pool.id,
-#         RewardPoolItem.item_id == item_id
-#     ).first()
-#     if not drop:
-#         raise HTTPException(status_code=404, detail="Drop item not found")
-
-#     db.delete(drop)
-#     db.commit()
-#     return {"message": "Drop item deleted"}
+@router.delete("/removeRewardItem")
+def delete_monster_drop(data:RemoveDropItemSchema, db: Session = Depends(get_db)):
+    drop_id = data.drop_id
+    data = db.query(RewardPoolItem).filter(RewardPoolItem.id == drop_id).first()
+    if data:
+        db.query(RewardPoolItem).filter(RewardPoolItem.id == drop_id).delete()
+        db.commit()
+        return {"message": "Drop item deleted"}
+    else:
+        raise HTTPException(
+            status_code=404, detail="drop pool not found")
