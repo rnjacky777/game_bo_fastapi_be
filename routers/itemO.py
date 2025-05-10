@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from models import Item
 from dependencies.db import get_db
 from models.items import RewardPoolItem
-from schemas.item import AddItemRequest, EditItemRequest, GetItemDetailRequest, GetItemDetailResponse, ItemListSchema, ItemSchema
+from schemas.item import AddItemRequest, EditItemRequest, GetItemDetailResponse, ItemListSchema, ItemSchema
 import logging
 
 
@@ -43,7 +43,7 @@ def get_list_items(
         items.pop()
 
     # 如果資料少於 limit，表示沒有更多資料，last_id 設為 None
-    if next_id and not has_more:
+    if not prev_id and not has_more:
         last_id = None
     else:
         last_id = items[-1].id
@@ -121,4 +121,4 @@ def edit_item(item_id: int, data: EditItemRequest, db: Session = Depends(get_db)
     db.commit()
     db.refresh(item)
 
-    return {"message": "Item updated successfully", "item_id": item.id} 
+    return {"message": "Item updated successfully", "item_id": item.id}

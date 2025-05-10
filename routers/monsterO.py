@@ -1,12 +1,12 @@
-from typing import List
-from fastapi import APIRouter, Depends, HTTPException
+import logging
+from typing import List, Optional
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
-from models import RewardPoolItem, Item
 from models.monsters import Monster
 from dependencies.db import get_db
-from schemas.monster import AddDropItemSchema, MonsterSchema,RemoveDropItemSchema
-from schemas.reward import UpdateDropProbabilitySchema
-from schemas.rewarditem import MonsterRewardSchema 
+from schemas.monster import AddMonsterRequest, EditMonsterRequest, GetMonsterDetailResponse, MonsterListSchema, MonsterSchema
+from services.monster_service import fetch_monsters, get_monster_by_id
+from services.reward_pool_service import add_reward_pool
 
 
 router = APIRouter()
@@ -23,102 +23,117 @@ def get_monsters(db: Session = Depends(get_db)):
             id=m.id,
             name=m.name,
         ))
-
     return result
 
 
-@router.get("/rewards/{monster_id}")
-def get_monster_rewards(monster_id: int, db: Session = Depends(get_db)):
-    monster = db.query(Monster).filter(Monster.id == monster_id).first()
-    if not monster or not monster.drop_pool:
-        raise HTTPException(
-            status_code=404, detail="Monster or reward pool not found")
-
-    rewards = []
-    for item in monster.drop_pool.items:
-        rewards.append(MonsterRewardSchema(
-            drop_id=item.id,
-            item_id=item.item_detail.id,
-            item_name=item.item_detail.name,
-            probability=item.probability
-        ))
-    return {"monster_id": monster.id, "monster_name": monster.name, "drop_pool": rewards}
-
-
-@router.put("/probability")
-def update_drop_probability(
-    data: UpdateDropProbabilitySchema,
+@router.get("/list_monster", response_model=MonsterListSchema)
+def get_list_monsters(
+    prev_id: Optional[int] = Query(None),
+    next_id: Optional[int] = Query(None, description="從此 ID 之後的項目"),
+    limit: int = Query(20, ge=1, le=100, description="每頁項目數"),
     db: Session = Depends(get_db)
 ):
-    monster_id = data.monster_id
-    item_id = data.item_id
-    # 找到怪物
-    monster = db.query(Monster).filter(Monster.id == monster_id).first()
+    # 設定方向為 next，始終使用 next_id 進行分頁
+    if prev_id:
+        direction = "prev"
+        started_id = prev_id
+    else:
+        direction = "next"
+        started_id = next_id
+
+    # 增加額外一筆資料來判斷是否有更多
+    fetch_limit = limit + 1
+
+    # 獲取項目
+    monsters = fetch_monsters(db, started_id, fetch_limit, direction)
+
+    # 判斷是否還有更多資料
+    has_more = len(monsters) == fetch_limit
+
+    # 若有更多資料，移除額外多取的項目
+    if has_more:
+        monsters.pop()
+
+    # 如果資料少於 limit，表示沒有更多資料，last_id 設為 None
+    if not prev_id and not has_more:
+        last_id = None
+    else:
+        last_id = monsters[-1].id
+
+    return MonsterListSchema(
+        last_id=last_id,  # 返回最後一筆資料的 ID
+        monster_data=[  # 返回項目資料
+            MonsterSchema(
+                monster_id=monster.id,
+                name=monster.name,
+                drop_pool_ids=monster.drop_pool_id
+            )
+            for monster in monsters
+        ]
+    )
+
+
+@router.get("/{monster_id}", response_model=MonsterSchema)
+def get_monster(
+    monster_id: int,
+    db: Session = Depends(get_db)
+):
+    monster = get_monster_by_id(db=db, monster_id=monster_id)
+    if not monster:
+        raise HTTPException(status_code=404, detail="monster not found")
+
+    return MonsterSchema(
+        monster_id=monster.id,
+        name=monster.name,
+        drop_pool_ids=monster.drop_pool_id
+    )
+
+
+@router.get("/monster_detail/{monster_id}", response_model=GetMonsterDetailResponse)
+def get_monster_detail(monster_id: int, db: Session = Depends(get_db)):
+    monster = get_monster_by_id(db=db, monster_id=monster_id)
+    logging.info(monster.drop_pool_id)
+    a = GetMonsterDetailResponse.model_validate(monster)
+    logging.info(a.drop_pool_id)
+
+    return GetMonsterDetailResponse.model_validate(monster)
+
+
+@router.put("/edit_monster/{monster_id}")
+def edit_monster(monster_id: int, data: EditMonsterRequest, db: Session = Depends(get_db)):
+    monster = get_monster_by_id(db, monster_id)
     if not monster:
         raise HTTPException(status_code=404, detail="Monster not found")
 
-    # 確保怪物有掉落池
-    if not monster.drop_pool:
-        raise HTTPException(
-            status_code=400, detail="This monster has no drop pool.")
+    # 將 data 的值更新到 item 上
+    update_data = data.model_dump()
+    for key, value in update_data.items():
+        setattr(monster, key, value)
 
-    # 找到對應的掉落物關聯
-    drop = (
-        db.query(RewardPoolItem)
-        .filter(
-            RewardPoolItem.pool_id == monster.drop_pool.id,
-            RewardPoolItem.item_id == item_id
-        )
-        .first()
-    )
-    if not drop:
-        raise HTTPException(
-            status_code=404, detail="Drop item not found in this monster's drop pool.")
-
-    # 更新機率
-    drop.probability = data.probability
     db.commit()
+    db.refresh(monster)
 
-    return {"message": "Probability updated successfully", "item_id": item_id, "new_probability": data.probability}
-
-
-@router.post("/addRewardItem")
-def add_monster_drop(data: AddDropItemSchema, db: Session = Depends(get_db)):
-    monster_id = data.monster_id
-    monster = db.query(Monster).filter(Monster.id == monster_id).first()
-    if not monster or not monster.drop_pool:
-        raise HTTPException(
-            status_code=404, detail="Monster or drop pool not found")
-
-    # 確認是否已存在相同 item_id
-    exists = db.query(RewardPoolItem).filter(
-        RewardPoolItem.pool_id == monster.drop_pool.id,
-        RewardPoolItem.item_id == data.item_id
-    ).first()
-    if exists:
-        raise HTTPException(
-            status_code=400, detail="Item already exists in drop pool")
-
-    drop = RewardPoolItem(
-        pool_id=monster.drop_pool.id,
-        item_id=data.item_id,
-        probability=data.probability
-    )
-    db.add(drop)
-    db.commit()
-    db.refresh(drop)
-    item_detail = db.query(Item).filter(Item.id == data.item_id).first()
-    return {"message": "Drop item added", "drop_id": drop.id, 'probability': data.probability, 'item_name': item_detail.name,'item_id':item_detail.id}
+    return {"message": "Monster updated successfully", "monster_id": monster.id}
 
 
-@router.delete("/removeRewardItem")
-def delete_monster_drop(data:RemoveDropItemSchema, db: Session = Depends(get_db)):
-    drop_id = data.drop_id
-    data = db.query(RewardPoolItem).filter(RewardPoolItem.id == drop_id).first()
-    if data:
-        db.query(RewardPoolItem).filter(RewardPoolItem.id == drop_id).delete()
+@router.post("/AddMonster")
+def add_monster(data: AddMonsterRequest, db: Session = Depends(get_db)):
+    for monster in data.monster_data:
+        if data.auto_add_reward_pool:
+            monster.drop_pool_id = add_reward_pool(
+                db=db, name=f'{monster.name}_pool')
+        drop = Monster(**monster.model_dump(by_alias=True))
+        db.add(drop)
         db.commit()
-        return {"message": "Drop item deleted"}
-    else:
-        raise HTTPException(
-            status_code=404, detail="drop pool not found")
+    db.refresh(drop)
+    return {"message": "success"}
+
+
+@router.delete("/RemoveMonster/{monster_id}")
+def remove_monster(monster_id: int, delete_pool: bool=Query(default=False), db: Session = Depends(get_db)):
+    if delete_pool:
+        # Todo Delete related pool
+        pass
+    db.query(Monster).filter(Monster.id == monster_id).delete()
+    db.commit()
+    return {"message": "success"}
