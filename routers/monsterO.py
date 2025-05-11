@@ -6,7 +6,8 @@ from models.monsters import Monster
 from dependencies.db import get_db
 from schemas.monster import AddMonsterRequest, EditMonsterRequest, GetMonsterDetailResponse, MonsterListSchema, MonsterSchema
 from services.monster_service import fetch_monsters, get_monster_by_id
-from services.reward_pool_service import add_reward_pool
+from services.reward_pool_item_service import remove_pool_item_by_pool_id
+from services.reward_pool_service import add_reward_pool, remove_reward_pool
 
 
 router = APIRouter()
@@ -131,9 +132,12 @@ def add_monster(data: AddMonsterRequest, db: Session = Depends(get_db)):
 
 @router.delete("/RemoveMonster/{monster_id}")
 def remove_monster(monster_id: int, delete_pool: bool=Query(default=False), db: Session = Depends(get_db)):
-    if delete_pool:
-        # Todo Delete related pool
-        pass
-    db.query(Monster).filter(Monster.id == monster_id).delete()
-    db.commit()
-    return {"message": "success"}
+    monster = get_monster_by_id(db=db, monster_id=monster_id)
+    if delete_pool and monster.drop_pool_id:
+        remove_reward_pool(db=db,pool_id=monster.drop_pool_id)
+
+    if monster:
+        db.delete(monster)
+        db.commit()
+        return {"message": "success"}
+    return {"message": "Failed"}

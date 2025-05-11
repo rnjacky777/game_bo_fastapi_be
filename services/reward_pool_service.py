@@ -13,3 +13,9 @@ def add_reward_pool(db: Session,name:str):
     db.refresh(new_pool)
     return new_pool.id
 
+def remove_reward_pool(db: Session,pool_id:int):
+    remove_pool = db.query(RewardPool).filter(RewardPool.id == pool_id).first()
+    if remove_pool:
+        db.delete(remove_pool)  # 這裡會啟動 cascade
+        db.commit()
+    return
