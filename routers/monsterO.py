@@ -6,7 +6,6 @@ from models.monsters import Monster
 from dependencies.db import get_db
 from schemas.monster import AddMonsterRequest, EditMonsterRequest, GetMonsterDetailResponse, MonsterListSchema, MonsterSchema
 from services.monster_service import fetch_monsters, get_monster_by_id
-from services.reward_pool_item_service import remove_pool_item_by_pool_id
 from services.reward_pool_service import add_reward_pool, remove_reward_pool
 
 
