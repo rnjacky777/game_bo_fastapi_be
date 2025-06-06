@@ -1,3 +1,4 @@
+from typing import Optional
 from pydantic import BaseModel
 
 
@@ -6,23 +7,25 @@ class StoryTextData(BaseModel):
     text: str
 
 
-class ConditionData(BaseModel):
-    result_id: int
-    prior: int
-    condition: dict
-
-
 class AddEventResultRequest(BaseModel):
     event_id: int
     name: str
-    story_text: list[StoryTextData] = []
-    condition_list: list[ConditionData] = []
-    reward_pool_id: int
-    prior: int
 
 
 class CreateEventRequest(BaseModel):
     name: str
     event_type: str
     description: str
-    story_text: list[StoryTextData] = []
+
+
+class EditEventRequest(BaseModel):
+    event_id: int
+    description: Optional[str] = None
+    story_text: list[StoryTextData] = None
+
+
+class EditEventResultRequest(BaseModel):
+    event_result_id: int
+    prior: int
+    story_text: list[StoryTextData] = None
+    condition_list: list[dict]
