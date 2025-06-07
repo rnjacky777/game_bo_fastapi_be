@@ -1,11 +1,11 @@
 from fastapi import Query
 from typing import List, Optional
-from services.item_service import fetch_items, get_item_by_id
+from core_system.services.item_service import fetch_items, get_item_by_id
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from models import Item
+from core_system.models import Item
 from dependencies.db import get_db
-from models.items import RewardPoolItem
+from core_system.models.items import RewardPoolItem
 from schemas.item import AddItemRequest, EditItemRequest, GetItemDetailResponse, ItemListSchema, ItemSchema
 import logging
 

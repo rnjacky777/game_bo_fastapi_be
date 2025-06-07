@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from models.database import Base, engine
+from core_system.models.database import Base, engine
 from routers import loginO
 from routers import userO
 from routers import monsterO, itemO, monsterRewardO, eventO

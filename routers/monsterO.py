@@ -2,11 +2,11 @@ import logging
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
-from models.monsters import Monster
+from core_system.models.monsters import Monster
 from dependencies.db import get_db
 from schemas.monster import AddMonsterRequest, EditMonsterRequest, GetMonsterDetailResponse, MonsterListSchema, MonsterSchema
-from services.monster_service import fetch_monsters, get_monster_by_id
-from services.reward_pool_service import add_reward_pool, remove_reward_pool
+from core_system.services.monster_service import fetch_monsters, get_monster_by_id
+from core_system.services.reward_pool_service import add_reward_pool, remove_reward_pool
 
 
 router = APIRouter()

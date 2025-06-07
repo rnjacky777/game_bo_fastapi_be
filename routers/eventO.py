@@ -2,8 +2,8 @@ from schemas.event import AddEventResultRequest, CreateEventRequest, EditEventRe
 from sqlalchemy.orm import Session
 from fastapi import APIRouter, Depends
 from dependencies.db import get_db
-from services.event_service import create_event_result_service, create_event_service, create_general_logic, edit_event_result_service, edit_event_service, edit_general_logic, get_event_by_event_id, get_event_result
-from services.reward_pool_service import add_reward_pool
+from core_system.services.event_service import create_event_result_service, create_event_service, create_general_logic, edit_event_result_service, edit_event_service, edit_general_logic, get_event_by_event_id, get_event_result
+from core_system.services.reward_pool_service import add_reward_pool
 router = APIRouter()
 
 
@@ -39,7 +39,8 @@ def get_event_detail(event_id: int, db: Session = Depends(get_db)):
         "type": event.type,
         "description": event.description,
         "story_text": event.general_logic.get_story_text(),
-        "condition": event.general_logic.get_condition_list()
+        "result_list": [{"name": result.name,
+                         "result_id": result.id} for result in event.general_logic.event_results]
     }
 
 
@@ -64,3 +65,14 @@ def edit_event_result(data: EditEventResultRequest, db: Session = Depends(get_db
                               )
 
     return {"message": "success"}
+
+@router.get("/result/{event_result_id}")
+def get_event_detail(event_result_id: int, db: Session = Depends(get_db)):
+    event_result = get_event_result(db=db, event_result_id=event_result_id)
+    return {
+        "event_result_id": event_result.id,
+        "name": event_result.name,
+        "story_text": event_result.get_story_text(),
+        "condition": event_result.get_condition_list(),
+        "reward_pool":event_result.reward_pool.items
+    }
