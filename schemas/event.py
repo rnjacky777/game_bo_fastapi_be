@@ -29,3 +29,18 @@ class EditEventResultRequest(BaseModel):
     prior: int
     story_text: list[StoryTextData] = None
     condition_list: list[dict]
+
+class AddItemToEventResultRequest(BaseModel):
+    item_id: int
+    probability: float
+    result_id: int
+
+class RemoveItemFromEventResultRequest(BaseModel):
+    item_id: int
+    result_id: int
+
+class RemoveEventResultRequest(BaseModel):
+    result_id: int
+
+class RemoveEventRequest(BaseModel):
+    event_id: int
