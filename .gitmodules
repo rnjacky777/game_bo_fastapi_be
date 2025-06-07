@@ -1,3 +1,9 @@
 [submodule "models"]
 	path = core_system
 	url = https://github.com/rnjacky777/game_core.git
+[submodule "game_core"]
+	path = game_core
+	url = https://github.com/rnjacky777/game_core.git
+[submodule "core_system"]
+	path = core_system
+	url = https://github.com/rnjacky777/game_core.git
