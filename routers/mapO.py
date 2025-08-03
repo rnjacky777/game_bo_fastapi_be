@@ -85,6 +85,7 @@ def get_map_list(
 def create_map(data: CreateMapRequest, db: Session = Depends(get_db)):
     try:
         created = create_maps_service(db=db, map_datas=data.map_datas)
+        db.commit()
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -138,6 +139,7 @@ def update_map_events(
             remove=payload.remove,
             normalize=payload.normalize or False,
         )
+        session.commit()
     except ValueError as ve:
         raise HTTPException(
             status_code=404 if "not found" in str(ve).lower() else 400,
@@ -181,6 +183,7 @@ def patch_map_basic(
             description=payload.description,
             image_url=payload.image_url,
         )
+        session.commit()
     except ValueError:
         raise HTTPException(status_code=404, detail="Map not found")
     except RuntimeError as e:
@@ -215,6 +218,7 @@ def patch_map_connections(
             connections=[c.model_dump() for c in (payload.connections or [])],
             remove_connections=payload.remove_connections,
         )
+        session.commit()
     except ValueError as ve:
         detail = str(ve)
         status = 404 if "not found" in detail.lower() else 400
@@ -250,6 +254,7 @@ def patch_map_connections(
 def remove_map(map_id: int, db: Session = Depends(get_db)):
     if not delete_map_service(db=db, map_id=map_id):
         raise HTTPException(status_code=404, detail="Map not found")
+    db.commit()
     return MessageResponse(message="Map removed successfully")
 
 
