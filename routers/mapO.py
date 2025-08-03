@@ -1,19 +1,15 @@
 import logging
-from sqlite3 import IntegrityError
 from typing import List, Optional
 from fastapi import APIRouter, Depends, Query, HTTPException
-from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
-from core_system.models.association_tables import MapConnection, MapEventAssociation
-from core_system.models.event import Event
 from core_system.models.maps import Map
 from dependencies.db import get_db
-from schemas.map import (CreateMapRequest, CreateMapResponse, CreatedMapInfo,
+from schemas.map import (ConnectionsUpdate, CreateMapRequest, CreateMapResponse, CreatedMapInfo,
                          EventAssociationOut, EventAssociationsUpdate,
-                         ListMapsResponse, MapConnectionUpsert, MapData, MapNeighborOut, MapOut,
+                         ListMapsResponse, MapData, MapNeighborOut, MapOut,
                          MapUpdate, MessageResponse)
-from core_system.services.map_service import create_map_service, delete_map_service, fetch_maps, get_map_by_id
+from core_system.services.map_service import create_maps_service, delete_map_service, fetch_maps, get_map_by_id, patch_map_basic_service, patch_map_connections_service, update_map_event_associations
 
 router = APIRouter(prefix="/maps", tags=["Maps"])
 
@@ -36,29 +32,29 @@ def get_map_list(
     prev_id: Optional[int] = Query(None),
     next_id: Optional[int] = Query(None, description="從此 ID 之後的項目"),
     limit: int = Query(20, ge=1, le=100, description="每頁項目數"),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
-    direction = "prev" if prev_id else "next"
-    started_id = prev_id if prev_id else next_id
-    fetch_limit = limit + 1
+    if prev_id is not None and next_id is not None:
+        raise HTTPException(status_code=400, detail="prev_id 和 next_id 不能同時提供")
 
-    maps = fetch_maps(db, started_id, fetch_limit, direction)
-    has_more = len(maps) == fetch_limit
+    direction = "prev" if prev_id is not None else "next"
+    cursor = prev_id if prev_id is not None else next_id
 
-    if has_more:
-        maps.pop()
-
-    last_id = maps[-1].id if maps else None
+    maps, next_cursor, prev_cursor, has_more = fetch_maps(
+        db, cursor, limit, direction
+    )
 
     return ListMapsResponse(
-        last_id=last_id,
+        next_cursor=next_cursor,
+        prev_cursor=prev_cursor,
         map_list=[
             MapData(
-                map_id=map_item.id,
-                name=map_item.name,
-                description=map_item.description
-            ) for map_item in maps
-        ]
+                map_id=m.id,
+                name=m.name,
+                description=m.description,
+            )
+            for m in maps
+        ],
     )
 
 
@@ -69,17 +65,17 @@ def get_map_list(
     description="批量建立一或多個新地圖。",
     response_model=CreateMapResponse,
 )
-def create_map(data: CreateMapRequest, db: Session = Depends(get_db)):
-    created_maps = []
-    for map_data in data.map_datas:
-        new_map = create_map_service(
-            db=db,
-            name=map_data.name,
-            description=map_data.description,
-            image_url=map_data.image_url
-        )
-        created_maps.append(CreatedMapInfo(id=new_map.id, name=new_map.name))
-    db.commit()
+def create_map(
+    data: CreateMapRequest,
+    db: Session = Depends(get_db),
+):
+    try:
+        created = create_maps_service(db=db, map_datas=data.map_datas)
+    except Exception as e:
+        # 可細化不同錯誤類型
+        raise HTTPException(status_code=400, detail=str(e))
+
+    created_maps = [CreatedMapInfo(id=c.id, name=c.name) for c in created]
     return CreateMapResponse(message="Maps created successfully", created_maps=created_maps)
 
 
@@ -122,77 +118,29 @@ def update_map_events(
     payload: EventAssociationsUpdate,
     session: Session = Depends(get_db),
 ):
-    map_obj = session.get(Map, map_id)
-    if not map_obj:
-        raise HTTPException(status_code=404, detail="Map not found")
-
-    # Upsert
-    if payload.upsert:
-        for ev in payload.upsert:
-            # 驗證 event 存在
-            event_obj = session.get(Event, ev.event_id)
-            if not event_obj:
-                raise HTTPException(
-                    status_code=400, detail=f"Event id {ev.event_id} does not exist")
-            existing = (
-                session.query(MapEventAssociation)
-                .filter_by(map_id=map_obj.id, event_id=ev.event_id)
-                .one_or_none()
-            )
-            if existing:
-                existing.probability = ev.probability
-            else:
-                new_assoc = MapEventAssociation(
-                    map=map_obj,
-                    event=event_obj,
-                    probability=ev.probability,
-                )
-                session.add(new_assoc)
-
-    # Remove
-    if payload.remove:
-        for eid in payload.remove:
-            assoc = (
-                session.query(MapEventAssociation)
-                .filter_by(map_id=map_obj.id, event_id=eid)
-                .one_or_none()
-            )
-            if assoc:
-                session.delete(assoc)
-
-    # Optional normalization: 將所有 probability 總和調整成 1（如果需要）
-    if payload.normalize:
-        assocs = (
-            session.query(MapEventAssociation)
-            .filter_by(map_id=map_obj.id)
-            .all()
-        )
-        total = sum(a.probability for a in assocs)
-        if total > 0:
-            for a in assocs:
-                a.probability = a.probability / total
-
     try:
-        session.commit()
-    except IntegrityError:
-        session.rollback()
-        raise HTTPException(
-            status_code=400, detail="Failed to update event associations")
-
-    session.refresh(map_obj)
-
-    # 回傳目前的 associations
-    out = []
-    for assoc in map_obj.event_associations:
-        event_obj = assoc.event  # 假設 relationship
-        out.append(
-            EventAssociationOut(
-                event_id=event_obj.id,
-                event_name=event_obj.name,
-                probability=assoc.probability,
-            )
+        dto_list = update_map_event_associations(
+            db=session,
+            map_id=map_id,
+            upsert=[{"event_id": e.event_id, "probability": e.probability}
+                    for e in (payload.upsert or [])],
+            remove=payload.remove,
+            normalize=payload.normalize or False,
         )
-    return out
+    except ValueError as ve:
+        raise HTTPException(status_code=404 if "not found" in str(
+            ve).lower() else 400, detail=str(ve))
+    except RuntimeError as re:
+        raise HTTPException(status_code=400, detail=str(re))
+
+    return [
+        EventAssociationOut(
+            event_id=d.event_id,
+            event_name=d.event_name,
+            probability=d.probability,
+        )
+        for d in dto_list
+    ]
 
 
 @router.patch(
@@ -209,70 +157,23 @@ def update_map_events(
 )
 def patch_map_basic(
     map_id: int,
-    payload: MapUpdate,  # 只會用到 name/description/image_url
+    payload: MapUpdate,
     session: Session = Depends(get_db),
 ):
-    map_obj = session.get(Map, map_id)
-    if not map_obj:
-        raise HTTPException(status_code=404, detail="Map not found")
-
-    if payload.name is not None:
-        map_obj.name = payload.name
-    if payload.description is not None:
-        map_obj.description = payload.description
-    if payload.image_url is not None:
-        map_obj.image_url = payload.image_url
-
     try:
-        session.commit()
-    except IntegrityError:
-        session.rollback()
-        raise HTTPException(
-            status_code=400, detail="Failed to update map basic attributes")
-
-    session.refresh(map_obj)
-
-    # 組 neighbors（維持原本輸出格式）
-    neighbors_out = []
-    for conn in map_obj.connections_a:
-        neighbor_map = conn.map_b
-        neighbors_out.append(
-            MapNeighborOut(
-                id=neighbor_map.id,
-                name=neighbor_map.name,
-                is_locked=conn.is_locked,
-                required_item=conn.required_item,
-                required_level=conn.required_level,
-            )
+        map_obj = patch_map_basic_service(
+            db=session,
+            map_id=map_id,
+            name=payload.name,
+            description=payload.description,
+            image_url=payload.image_url,
         )
-    for conn in map_obj.connections_b:
-        neighbor_map = conn.map_a
-        neighbors_out.append(
-            MapNeighborOut(
-                id=neighbor_map.id,
-                name=neighbor_map.name,
-                is_locked=conn.is_locked,
-                required_item=conn.required_item,
-                required_level=conn.required_level,
-            )
-        )
+    except ValueError:
+        raise HTTPException(status_code=404, detail="Map not found")
+    except RuntimeError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
-    return MapOut(
-        id=map_obj.id,
-        name=map_obj.name,
-        description=map_obj.description,
-        image_url=map_obj.image_url,
-        neighbors=neighbors_out,
-    )
-
-
-class ConnectionsUpdate(BaseModel):
-    connections: Optional[List[MapConnectionUpsert]] = Field(
-        None, description="要新增或更新的鄰居連線"
-    )
-    remove_connections: Optional[List[int]] = Field(
-        None, description="要移除的鄰居地圖 ID"
-    )
+    return build_map_out_response(map_obj)
 
 
 @router.patch(
@@ -294,71 +195,36 @@ def patch_map_connections(
     payload: ConnectionsUpdate,
     session: Session = Depends(get_db),
 ):
-    map_obj = session.get(Map, map_id)
-    if not map_obj:
-        raise HTTPException(status_code=404, detail="Map not found")
-
-    # upsert
-    if payload.connections:
-        for conn_in in payload.connections:
-            if conn_in.neighbor_id == map_obj.id:
-                continue  # 跳過自己
-            neighbor = session.get(Map, conn_in.neighbor_id)
-            if not neighbor:
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"Neighbor map id {conn_in.neighbor_id} does not exist"
-                )
-            upsert_connection(
-                session,
-                map_obj,
-                neighbor,
-                is_locked=conn_in.is_locked,
-                required_item=conn_in.required_item,
-                required_level=conn_in.required_level,
-            )
-
-    # remove
-    if payload.remove_connections:
-        for nid in payload.remove_connections:
-            if nid == map_obj.id:
-                continue
-            neighbor = session.get(Map, nid)
-            if neighbor:
-                remove_connection(session, map_obj, neighbor)
-
     try:
-        session.commit()
-    except IntegrityError:
-        session.rollback()
-        raise HTTPException(
-            status_code=400, detail="Failed to update connections")
+        # 執行更新服務，此服務會處理資料庫的 commit
+        patch_map_connections_service(
+            db=session,
+            map_id=map_id,
+            connections=[c.model_dump() for c in (payload.connections or [])],
+            remove_connections=payload.remove_connections,
+        )
+    except ValueError as ve:
+        # 處理服務層拋出的錯誤 (如 map_id 或 neighbor_id 不存在)
+        detail = str(ve)
+        status = 404 if "not found" in detail.lower() else 400
+        raise HTTPException(status_code=status, detail=detail)
+    except RuntimeError as re:
+        # 處理資料庫 commit 失敗等運行時錯誤
+        raise HTTPException(status_code=400, detail=str(re))
 
-    session.refresh(map_obj)
+    # 為了避免 N+1 查詢問題並確保資料最新，我們重新從資料庫獲取 map 物件。
+    # get_map_by_id 已優化，會預先載入所有關聯資料。
+    map_obj = get_map_by_id(db=session, map_id=map_id)
+    if not map_obj:
+        # 這是個防禦性檢查，正常情況下不應發生
+        raise HTTPException(status_code=404, detail="Map not found after update")
 
+    # 使用高效載入的 map_obj 來建立回應
     neighbors_out = []
     for conn in map_obj.connections_a:
-        neighbor_map = conn.map_b
-        neighbors_out.append(
-            MapNeighborOut(
-                id=neighbor_map.id,
-                name=neighbor_map.name,
-                is_locked=conn.is_locked,
-                required_item=conn.required_item,
-                required_level=conn.required_level,
-            )
-        )
+        neighbors_out.append(MapNeighborOut.model_validate(conn.map_b, context={'connection': conn}))
     for conn in map_obj.connections_b:
-        neighbor_map = conn.map_a
-        neighbors_out.append(
-            MapNeighborOut(
-                id=neighbor_map.id,
-                name=neighbor_map.name,
-                is_locked=conn.is_locked,
-                required_item=conn.required_item,
-                required_level=conn.required_level,
-            )
-        )
+        neighbors_out.append(MapNeighborOut.model_validate(conn.map_a, context={'connection': conn}))
 
     return neighbors_out
 
@@ -423,35 +289,3 @@ def build_map_out_response(map_obj: Map) -> MapOut:
         neighbors=neighbors_out,
         events=events_out,
     )
-
-
-def get_ordered_pair(id1: int, id2: int) -> tuple[int, int]:
-    return (id1, id2) if id1 < id2 else (id2, id1)
-
-
-def upsert_connection(session: Session, map_obj: Map, neighbor: Map, **kwargs) -> MapConnection:
-    a, b = (map_obj, neighbor) if map_obj.id < neighbor.id else (
-        neighbor, map_obj)
-    conn = (
-        session.query(MapConnection)
-        .filter_by(map_a_id=a.id, map_b_id=b.id)
-        .one_or_none()
-    )
-    if conn is None:
-        conn = MapConnection(map_a=a, map_b=b, **kwargs)
-        session.add(conn)
-    else:
-        for key, val in kwargs.items():
-            setattr(conn, key, val)
-    return conn
-
-
-def remove_connection(session: Session, map_obj: Map, neighbor: Map):
-    a_id, b_id = get_ordered_pair(map_obj.id, neighbor.id)
-    conn = (
-        session.query(MapConnection)
-        .filter_by(map_a_id=a_id, map_b_id=b_id)
-        .one_or_none()
-    )
-    if conn:
-        session.delete(conn)

@@ -4,6 +4,7 @@ from pydantic import BaseModel, Field, model_validator
 
 # ---------- Map 相關 ----------
 
+
 class MapData(BaseModel):
     """用於地圖列表和基本地圖資訊的回應模型。"""
     map_id: int = Field(..., description="Map 的唯一識別 ID")
@@ -52,6 +53,15 @@ class MapConnectionUpsert(BaseModel):
     required_level: int = Field(0, ge=0, description="解鎖需要的等級")
 
 
+class ConnectionsUpdate(BaseModel):
+    connections: Optional[List[MapConnectionUpsert]] = Field(
+        None, description="要新增或更新的鄰居連線"
+    )
+    remove_connections: Optional[List[int]] = Field(
+        None, description="要移除的鄰居地圖 ID"
+    )
+
+
 class MapUpdate(BaseModel):
     """用於更新地圖資訊（包含連線）的請求模型。"""
     name: Optional[str] = Field(None, max_length=100, description="地圖名稱（可選）")
@@ -77,7 +87,8 @@ class MapOut(BaseModel):
     description: Optional[str] = Field(None, description="地圖敘述")
     image_url: Optional[str] = Field(None, description="地圖圖片 URL")
     neighbors: List[MapNeighborOut] = Field(..., description="所有鄰居地圖與連線條件")
-    events: List["EventAssociationOut"] = Field(..., description="地圖上可能發生的事件與機率")
+    events: List["EventAssociationOut"] = Field(
+        ..., description="地圖上可能發生的事件與機率")
 
     model_config = {
         "from_attributes": True,
