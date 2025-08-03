@@ -65,6 +65,7 @@ def get_event(event_id: int, db: Session = Depends(get_db)):
 
 @router.post("/CreateEvent")
 def create_event(data: CreateEventRequest, db: Session = Depends(get_db)):
+    logging.debug('Go in to CreateEvent')
     for event_data in data.event_datas:
         event = create_event_service(
             db=db,
@@ -72,7 +73,9 @@ def create_event(data: CreateEventRequest, db: Session = Depends(get_db)):
             event_type=event_data.event_type,
             description=event_data.description
         )
+        logging.debug(f'event id :{event.id}')
         create_general_logic(db=db, event_id=event.id)
+    db.commit()  # 在所有操作成功後，提交整個交易
     return {"message": "success"}
 
 
@@ -85,6 +88,7 @@ def edit_event(event_id: int, data: EditEventRequest, db: Session = Depends(get_
         description=data.description,
         name=data.name
     )
+    db.commit()
     return {"message": "success"}
 
 
@@ -107,6 +111,7 @@ def get_event_detail(event_id: int, db: Session = Depends(get_db)):
 @router.delete("/{event_id}")
 def remove_event(event_id: int, db: Session = Depends(get_db)):
     delete_event(db=db, event_id=event_id)
+    db.commit()
     return {"message": "success"}
 
 # ---------------------- Event Result APIs ---------------------- #
@@ -121,6 +126,7 @@ def create_event_result(data: AddEventResultRequest, db: Session = Depends(get_d
         reward_pool_id=reward_pool_id,
         general_event_logic_id=event.general_logic.id
     )
+    db.commit()
     return {"message": "success"}
 
 
@@ -136,6 +142,7 @@ def edit_event_result(result_id: int, data: EditEventResultRequest, db: Session 
         condition=data.condition_list,
         status_effects_json=data.status_effects_json
     )
+    db.commit()
     return {"message": "success"}
 
 
@@ -162,6 +169,7 @@ def get_event_result_detail(event_result_id: int, db: Session = Depends(get_db))
 @router.delete("/result/{event_result_id}")
 def remove_event_result(event_result_id: int, db: Session = Depends(get_db)):
     delete_event_result(db=db, result_id=event_result_id)
+    db.commit()
     return {"message": "success"}
 
 # ---------------------- Reward Pool Item APIs ---------------------- #

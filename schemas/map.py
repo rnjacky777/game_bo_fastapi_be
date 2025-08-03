@@ -16,7 +16,8 @@ class MapData(BaseModel):
 
 class ListMapsResponse(BaseModel):
     """GET /list-map 的回應模型。"""
-    last_id: Optional[int] = Field(None, description="分頁用的最後一筆 ID，可用來做 cursor")
+    next_cursor: Optional[int] = Field(None, description="下一頁的 cursor ID。若為 null 表示沒有下一頁。")
+    prev_cursor: Optional[int] = Field(None, description="上一頁的 cursor ID。若為 null 表示沒有上一頁。")
     map_list: List[MapData] = Field(..., description="地圖資料列表")
 
 
