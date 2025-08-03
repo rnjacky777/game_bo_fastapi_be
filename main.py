@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from core_system.models.database import Base, engine
 from routers import loginO
 from routers import userO
-from routers import monsterO, itemO, monsterRewardO, eventO
+from routers import monsterO, itemO, monsterRewardO, eventO,mapO
 import logging
 
 # 設定 root logger
@@ -35,6 +35,7 @@ app.include_router(router=monsterRewardO.router,
                    prefix="/bo_api/monster_reward")
 app.include_router(router=itemO.router, prefix="/bo_api/item")
 app.include_router(router=eventO.router, prefix="/bo_api/event")
+app.include_router(router=mapO.router, prefix="/bo_api")
 
 
 # BO
