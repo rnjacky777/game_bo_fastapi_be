@@ -1,20 +1,39 @@
 import logging
 from typing import List, Optional
+
 from fastapi import APIRouter, Depends, Query, HTTPException
 from sqlalchemy.orm import Session
 
 from core_system.models.maps import Map
+from core_system.services.map_service import (
+    create_maps_service,
+    delete_map_service,
+    fetch_maps,
+    get_map_by_id,
+    patch_map_basic_service,
+    patch_map_connections_service,
+    update_map_event_associations,
+)
 from dependencies.db import get_db
-from schemas.map import (ConnectionsUpdate, CreateMapRequest, CreateMapResponse, CreatedMapInfo,
-                         EventAssociationOut, EventAssociationsUpdate,
-                         ListMapsResponse, MapData, MapNeighborOut, MapOut,
-                         MapUpdate, MessageResponse)
-from core_system.services.map_service import create_maps_service, delete_map_service, fetch_maps, get_map_by_id, patch_map_basic_service, patch_map_connections_service, update_map_event_associations
+from schemas.map import (
+    ConnectionsUpdate,
+    CreateMapRequest,
+    CreateMapResponse,
+    CreatedMapInfo,
+    EventAssociationOut,
+    EventAssociationsUpdate,
+    ListMapsResponse,
+    MapData,
+    MapNeighborOut,
+    MapOut,
+    MapUpdate,
+    MessageResponse,
+)
 
 router = APIRouter(prefix="/maps", tags=["Maps"])
 
-# -------------------------- Map CRUD APIs -------------------------- #
 
+# -------------------------- Map CRUD APIs -------------------------- #
 
 @router.get(
     "/",
@@ -23,9 +42,9 @@ router = APIRouter(prefix="/maps", tags=["Maps"])
     description="""
 使用 cursor-based 分頁來獲取地圖列表。
 
-- **next_id**: 提供上次請求回傳的 `last_id` 來獲取下一頁。
+- **next_id**: 提供上次請求回傳的 `next_cursor` 來獲取下一頁。
 - **prev_id**: 提供列表第一項的 ID 來獲取上一頁 (如果有的話)。
-- 同時提供 `prev_id` 和 `next_id` 是不合法的，會優先使用 `prev_id`。
+- 同時提供 `prev_id` 和 `next_id` 是不合法的。
 """,
 )
 def get_map_list(
@@ -40,9 +59,7 @@ def get_map_list(
     direction = "prev" if prev_id is not None else "next"
     cursor = prev_id if prev_id is not None else next_id
 
-    maps, next_cursor, prev_cursor, has_more = fetch_maps(
-        db, cursor, limit, direction
-    )
+    maps, next_cursor, prev_cursor, has_more = fetch_maps(db, cursor, limit, direction)
 
     return ListMapsResponse(
         next_cursor=next_cursor,
@@ -65,14 +82,10 @@ def get_map_list(
     description="批量建立一或多個新地圖。",
     response_model=CreateMapResponse,
 )
-def create_map(
-    data: CreateMapRequest,
-    db: Session = Depends(get_db),
-):
+def create_map(data: CreateMapRequest, db: Session = Depends(get_db)):
     try:
         created = create_maps_service(db=db, map_datas=data.map_datas)
     except Exception as e:
-        # 可細化不同錯誤類型
         raise HTTPException(status_code=400, detail=str(e))
 
     created_maps = [CreatedMapInfo(id=c.id, name=c.name) for c in created]
@@ -83,7 +96,7 @@ def create_map(
     "/{map_id}",
     response_model=MapOut,
     summary="取得單一地圖詳細資訊",
-    description="根據地圖 ID 獲取其詳細資料，包含相鄰的地圖及其連線狀態。",
+    description="根據地圖 ID 獲取其詳細資料，包含相鄰的地圖及其連線狀態與事件。",  # 擴充說明
     responses={404: {"description": "找不到指定 ID 的地圖"}},
 )
 def get_map_details(map_id: int, db: Session = Depends(get_db)):
@@ -95,7 +108,6 @@ def get_map_details(map_id: int, db: Session = Depends(get_db)):
 
 
 # -------------------------- Map Feature APIs -------------------------- #
-
 
 @router.patch(
     "/{map_id}/events",
@@ -122,14 +134,15 @@ def update_map_events(
         dto_list = update_map_event_associations(
             db=session,
             map_id=map_id,
-            upsert=[{"event_id": e.event_id, "probability": e.probability}
-                    for e in (payload.upsert or [])],
+            upsert=[{"event_id": e.event_id, "probability": e.probability} for e in (payload.upsert or [])],
             remove=payload.remove,
             normalize=payload.normalize or False,
         )
     except ValueError as ve:
-        raise HTTPException(status_code=404 if "not found" in str(
-            ve).lower() else 400, detail=str(ve))
+        raise HTTPException(
+            status_code=404 if "not found" in str(ve).lower() else 400,
+            detail=str(ve),
+        )
     except RuntimeError as re:
         raise HTTPException(status_code=400, detail=str(re))
 
@@ -196,7 +209,6 @@ def patch_map_connections(
     session: Session = Depends(get_db),
 ):
     try:
-        # 執行更新服務，此服務會處理資料庫的 commit
         patch_map_connections_service(
             db=session,
             map_id=map_id,
@@ -204,27 +216,25 @@ def patch_map_connections(
             remove_connections=payload.remove_connections,
         )
     except ValueError as ve:
-        # 處理服務層拋出的錯誤 (如 map_id 或 neighbor_id 不存在)
         detail = str(ve)
         status = 404 if "not found" in detail.lower() else 400
         raise HTTPException(status_code=status, detail=detail)
     except RuntimeError as re:
-        # 處理資料庫 commit 失敗等運行時錯誤
         raise HTTPException(status_code=400, detail=str(re))
 
-    # 為了避免 N+1 查詢問題並確保資料最新，我們重新從資料庫獲取 map 物件。
-    # get_map_by_id 已優化，會預先載入所有關聯資料。
     map_obj = get_map_by_id(db=session, map_id=map_id)
     if not map_obj:
-        # 這是個防禦性檢查，正常情況下不應發生
         raise HTTPException(status_code=404, detail="Map not found after update")
 
-    # 使用高效載入的 map_obj 來建立回應
-    neighbors_out = []
+    neighbors_out: List[MapNeighborOut] = []
     for conn in map_obj.connections_a:
-        neighbors_out.append(MapNeighborOut.model_validate(conn.map_b, context={'connection': conn}))
+        neighbors_out.append(
+            MapNeighborOut.model_validate(conn.map_b, context={"connection": conn})
+        )
     for conn in map_obj.connections_b:
-        neighbors_out.append(MapNeighborOut.model_validate(conn.map_a, context={'connection': conn}))
+        neighbors_out.append(
+            MapNeighborOut.model_validate(conn.map_a, context={"connection": conn})
+        )
 
     return neighbors_out
 
@@ -242,11 +252,14 @@ def remove_map(map_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Map not found")
     return MessageResponse(message="Map removed successfully")
 
+
 # ---------------------- Helper Functions ---------------------- #
 
 
 def build_map_out_response(map_obj: Map) -> MapOut:
-    """Helper to build the MapOut response model from a Map ORM object."""
+    """
+    Helper to build the MapOut response model from a Map ORM object.
+    """
     neighbors_out: List[MapNeighborOut] = []
     for conn in map_obj.connections_a:
         neighbor_map = conn.map_b
