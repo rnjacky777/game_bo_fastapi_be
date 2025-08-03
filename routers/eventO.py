@@ -183,6 +183,7 @@ def add_item_to_event_result(data: AddItemToEventResultRequest, db: Session = De
         item_id=data.item_id,
         probability=data.probability
     )
+    db.commit()
     return {"message": "success"}
 
 
@@ -194,6 +195,7 @@ def remove_item_from_event_result(result_id: int, item_id: int, db: Session = De
         pool_id=event_result.reward_pool_id,
         item_id=item_id
     )
+    db.commit()
     return {"message": "success"}
 
 
@@ -206,4 +208,5 @@ def edit_event_result_item_probability(result_id: int, item_id: int, data: EditE
         item_id=item_id,
         probability=data.probability
     )
+    db.commit()
     return {"message": "success"}
