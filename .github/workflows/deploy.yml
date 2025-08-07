@@ -23,7 +23,7 @@ jobs:
 
     - name: Copy files to VM
       run: |
-        rsync -avz --exclude=".git" ./ ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/home/${{ secrets.SSH_USER }}/my_fastapi_app
+        rsync -avz --exclude=".git" -e "ssh -i ~/.ssh/github-actions -o StrictHostKeyChecking=no" ./ ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/home/${{ secrets.SSH_USER }}/my_fastapi_app
 
     - name: Remote Docker Compose Build and Up
       run: |
