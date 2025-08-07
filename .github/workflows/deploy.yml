@@ -19,10 +19,11 @@ jobs:
       with:
         ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
 
-    - name: Add SSH known hosts
-      uses: webfactory/ssh-known-hosts@v0.5.0
+    - name: Set up SSH
+      uses: webfactory/ssh-agent@v0.7.0
       with:
-        known_hosts: ${{ secrets.SSH_KNOWN_HOSTS }}
+        ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+        known-hosts: ${{ secrets.SSH_KNOWN_HOSTS }}
 
     - name: Copy files to VM
       run: |
