@@ -16,7 +16,8 @@ logging.basicConfig(
 )
 
 app = FastAPI(title="Modular FastAPI Project",
-              openapi_version="3.1.0")
+              openapi_version="3.1.0",
+              root_path="/bo_api")
 origins = os.getenv("CORS_ORIGINS", "*").split(",")
 
 app.add_middleware(
