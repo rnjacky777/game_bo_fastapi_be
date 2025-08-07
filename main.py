@@ -31,14 +31,14 @@ app.add_middleware(
 if os.getenv("INIT_DB", "false").lower() == "true":
     Base.metadata.create_all(bind=engine)
 # 將不同路由模組註冊到主應用
-app.include_router(router=loginO.router, prefix="/bo_api/auth")
-app.include_router(router=userO.router, prefix="/bo_api/user")
-app.include_router(router=monsterO.router, prefix="/bo_api/monster")
+app.include_router(router=loginO.router, prefix="/auth")
+app.include_router(router=userO.router, prefix="/user")
+app.include_router(router=monsterO.router, prefix="/monster")
 app.include_router(router=monsterRewardO.router,
-                   prefix="/bo_api/monster_reward")
-app.include_router(router=itemO.router, prefix="/bo_api/item")
-app.include_router(router=eventO.router, prefix="/bo_api/event")
-app.include_router(router=mapO.router, prefix="/bo_api")
+                   prefix="/monster_reward")
+app.include_router(router=itemO.router, prefix="/item")
+app.include_router(router=eventO.router, prefix="/event")
+app.include_router(router=mapO.router, prefix="")
 
 
 # BO
