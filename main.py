@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 from core_system.models.database import Base, engine
 from routers import loginO
 from routers import userO
-from routers import monsterO, itemO, monsterRewardO, eventO,mapO
+from routers import monsterO, itemO, monsterRewardO, eventO, mapO
 import logging
 load_dotenv()
 # 設定 root logger
@@ -15,7 +15,8 @@ logging.basicConfig(
     format="%(asctime)s - %(levelname)s - %(message)s"
 )
 
-app = FastAPI(title="Modular FastAPI Project")
+app = FastAPI(title="Modular FastAPI Project",
+              openapi_version="3.1.0")
 origins = os.getenv("CORS_ORIGINS", "*").split(",")
 
 app.add_middleware(
