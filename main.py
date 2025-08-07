@@ -1,11 +1,14 @@
+import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from dotenv import load_dotenv
+
 from core_system.models.database import Base, engine
 from routers import loginO
 from routers import userO
 from routers import monsterO, itemO, monsterRewardO, eventO,mapO
 import logging
-
+load_dotenv()
 # 設定 root logger
 logging.basicConfig(
     level=logging.DEBUG,
@@ -13,11 +16,8 @@ logging.basicConfig(
 )
 
 app = FastAPI(title="Modular FastAPI Project")
+origins = os.getenv("CORS_ORIGINS", "*").split(",")
 
-origins = [
-    "http://localhost",  # Vite React 開發環境
-    "http://127.0.0.1",  # 有時瀏覽器會用 127.0.0.1
-]
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],             # 可允許的來源
@@ -26,7 +26,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],              # 允許所有 headers
 )
-Base.metadata.create_all(bind=engine)
+if os.getenv("INIT_DB", "false").lower() == "true":
+    Base.metadata.create_all(bind=engine)
 # 將不同路由模組註冊到主應用
 app.include_router(router=loginO.router, prefix="/bo_api/auth")
 app.include_router(router=userO.router, prefix="/bo_api/user")
