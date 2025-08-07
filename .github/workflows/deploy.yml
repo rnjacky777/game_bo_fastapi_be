@@ -27,8 +27,8 @@ jobs:
 
     - name: Remote Docker Compose Build and Up
       run: |
-        ssh -i ~/.ssh/github-actions -o StrictHostKeyChecking=no ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} << EOF
-          cd ~/my_fastapi_app || exit 1
+        ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} << 'EOF'
+          cd ~/my_fastapi_app
           docker compose down
           docker compose build
           docker compose up -d
