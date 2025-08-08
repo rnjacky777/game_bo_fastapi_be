@@ -31,7 +31,6 @@ class CharTempCreate(BaseModel):
 
 from sqlalchemy.orm import Session
 from core_system.models import CharTemp
-from schemas.user import CharTempCreate
 
 def create_char_temp(db: Session, char_data: CharTempCreate) -> CharTemp:
     char = CharTemp(**char_data.dict())
