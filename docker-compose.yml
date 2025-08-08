@@ -8,4 +8,7 @@ services:
       - "8000:8000"
     env_file:
       - .env
+    volumes:
+      - ../shared_db:/db  # 將主機的 ./data 資料夾掛載到 container 的 /app/data
     restart: always
+    
