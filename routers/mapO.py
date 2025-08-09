@@ -4,7 +4,7 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, Query, HTTPException
 from sqlalchemy.orm import Session
 
-from core_system.models.maps import Map
+from core_system.models.maps import Map, MapArea
 from core_system.services.map_service import (
     create_maps_service,
     delete_map_service,
@@ -307,3 +307,31 @@ def build_map_out_response(map_obj: Map) -> MapOut:
         neighbors=neighbors_out,
         events=events_out,
     )
+
+
+# for test
+
+from pydantic import BaseModel
+class MapAreaCreate(BaseModel):
+    map_id: int
+    name: str
+    description: str | None = None
+    image_url: str | None = None
+
+@router.post("/map-areas", summary="新增一筆地區")
+def create_map_area(map_area: MapAreaCreate, db: Session = Depends(get_db)):
+    new_area = MapArea(
+        map_id=map_area.map_id,
+        name=map_area.name,
+        description=map_area.description,
+        image_url=map_area.image_url
+    )
+    db.add(new_area)
+    try:
+        db.commit()
+        db.refresh(new_area)
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+    return {"message": "地區新增成功", "id": new_area.id}
