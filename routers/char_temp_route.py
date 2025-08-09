@@ -1,7 +1,9 @@
+import logging
+from typing import Optional
 from sqlalchemy.exc import IntegrityError
-from core_system.services.char_temp_service import create_char_temp, delete_char_temp, get_all_char_temps, get_char_temp, update_char_temp
-from schemas.char_temp import CharTempCreate, CharTempResponse, CharTempUpdate
-from fastapi import APIRouter, Depends, HTTPException, status
+from core_system.services.char_temp_service import create_char_temp, delete_char_temp, fetch_char_temps, get_char_temp, update_char_temp
+from schemas.char_temp import CharTempCreate, CharTempData, CharTempResponse, CharTempUpdate, ListCharTempResponse
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 from dependencies.db import get_db
 
@@ -40,10 +42,44 @@ def create_char_template(char_data: CharTempCreate, db: Session = Depends(get_db
         )
 
 
-@router.get("/", response_model=list[CharTempResponse])
-def list_char_templates(db: Session = Depends(get_db)):
-    chars = get_all_char_temps(db)
-    return chars
+@router.get("/", response_model=ListCharTempResponse)
+def list_char_templates(
+    prev_id: Optional[int] = Query(None),
+    next_id: Optional[int] = Query(None, description="從此 ID 之後的項目"),
+    limit: int = Query(20, ge=1, le=100, description="每頁項目數"),
+    db: Session = Depends(get_db)
+):
+    direction = "prev" if prev_id else "next"
+    started_id = prev_id if prev_id else next_id
+    fetch_limit = limit + 1
+
+    chars = fetch_char_temps(db, started_id, fetch_limit, direction)
+    has_more = len(chars) == fetch_limit
+
+    if has_more:
+        chars.pop()
+
+    if chars:
+        char_ids = [char.id for char in chars]
+        logging.debug(
+            f"Fetched character template IDs for the response: {char_ids}")
+    else:
+        logging.debug(
+            "No character templates to return for the given criteria.")
+
+    last_id = chars[-1].id if len(chars) >= limit else None
+
+    return ListCharTempResponse(
+        last_id=last_id,
+        char_temp_list=[
+            CharTempData(
+                id=char.id,
+                name=char.name,
+                rarity=char.rarity,  # 如果有這些欄位
+            ) for char in chars
+        ],
+        # has_more = has_more
+    )
 
 
 @router.get("/{char_id}", response_model=CharTempResponse)

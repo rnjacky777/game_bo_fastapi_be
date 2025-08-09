@@ -41,5 +41,23 @@ class CharTempResponse(CharTempBase):
     為了保持 API 的一致性，此模型用於單一查詢、列表、建立和更新的回應。
     """
     id: int
+    name: str
 
     model_config = ConfigDict(from_attributes=True)
+
+class CharTempData(BaseModel):
+    """
+    主要的回應 Schema，包含所有基本欄位以及資料庫生成的 'id'。
+    為了保持 API 的一致性，此模型用於單一查詢、列表、建立和更新的回應。
+    """
+    id: int
+    name: str
+    rarity: int
+
+    model_config = ConfigDict(from_attributes=True)
+
+class ListCharTempResponse(BaseModel):
+    last_id: Optional[int] = None
+    char_temp_list: list[CharTempData] = []
+    # has_more: bool
+
