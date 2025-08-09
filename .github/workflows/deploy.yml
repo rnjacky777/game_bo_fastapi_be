@@ -5,6 +5,11 @@ on:
   #   branches:
   #     - main
   workflow_dispatch:
+    inputs:
+      branch:
+        description: "Which branch to deploy"
+        required: true
+        default: "main"
 
 jobs:
   deploy:
@@ -14,7 +19,7 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v3
       with:
-        submodules: recursive 
+        ref: ${{ github.event.inputs.branch }}
 
     - name: Set up SSH
       run: |
