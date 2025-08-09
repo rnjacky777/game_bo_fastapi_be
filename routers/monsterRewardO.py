@@ -8,8 +8,10 @@ from schemas.monster import AddDropItemSchema, MonsterSchema, RemoveDropItemSche
 from schemas.reward import UpdateDropProbabilitySchema
 from schemas.rewarditem import MonsterRewardSchema
 
-
-router = APIRouter()
+router = APIRouter(
+    prefix="/monster-rewards",
+    tags=["Monster Rewards"]
+)
 
 
 @router.get("/rewards/{monster_id}")

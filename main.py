@@ -4,9 +4,16 @@ from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 
 from core_system.models.database import Base, engine
-from routers import loginO
-from routers import userO
-from routers import monsterO, itemO, monsterRewardO, eventO, mapO
+from routers import (
+    char_temp_route,
+    eventO,
+    itemO,
+    loginO,
+    mapO,
+    monsterO,
+    monsterRewardO,
+    userO,
+)
 import logging
 load_dotenv()
 # 設定 root logger
@@ -30,16 +37,16 @@ app.add_middleware(
 )
 if os.getenv("INIT_DB", "false").lower() == "true":
     Base.metadata.create_all(bind=engine)
-# 將不同路由模組註冊到主應用
-app.include_router(router=loginO.router, prefix="/auth")
-app.include_router(router=userO.router, prefix="/user")
-app.include_router(router=monsterO.router, prefix="/monster")
-app.include_router(router=monsterRewardO.router,
-                   prefix="/monster_reward")
-app.include_router(router=itemO.router, prefix="/item")
-app.include_router(router=eventO.router, prefix="/event")
-app.include_router(router=mapO.router, prefix="")
 
+# 將不同路由模組註冊到主應用
+app.include_router(loginO.router)
+app.include_router(userO.router)
+app.include_router(monsterO.router)
+app.include_router(monsterRewardO.router)
+app.include_router(itemO.router)
+app.include_router(eventO.router)
+app.include_router(mapO.router)
+app.include_router(char_temp_route.router)
 
 # BO
 # app.include_router(router=users.router,prefix="/admin/users")

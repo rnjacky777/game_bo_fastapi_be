@@ -7,8 +7,10 @@ from dependencies.db import get_db
 from dependencies.user import get_current_user
 from schemas.login import LoginRequest, Token
 
-
-router = APIRouter()
+router = APIRouter(
+    prefix="/auth",
+    tags=["Authentication"]
+)
 
 
 @router.post("/login", response_model=Token)
@@ -22,5 +24,3 @@ async def login(form_data: LoginRequest, db: Session = Depends(get_db)):
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=str(e)
         )
-
-

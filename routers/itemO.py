@@ -10,8 +10,10 @@ from schemas.item import AddItemRequest, EditItemRequest, GetItemDetailResponse,
 import logging
 
 
-router = APIRouter()
-
+router = APIRouter(
+    prefix="/items",
+    tags=["Items"]
+)
 
 @router.get("/list_items", response_model=ItemListSchema)
 def get_list_items(
