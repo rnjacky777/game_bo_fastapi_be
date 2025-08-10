@@ -45,6 +45,24 @@ class CharTempResponse(CharTempBase):
 
     model_config = ConfigDict(from_attributes=True)
 
+# --- Schema ---
+class CharTempInfoUpdate(BaseModel):
+    """更新角色一般資訊"""
+    name: Optional[str] = None
+    rarity: Optional[int] = None
+    description: Optional[str] = None
+    image_sm_url: Optional[str] = None
+    image_lg_url: Optional[str] = None
+
+
+class CharTempStatsUpdate(BaseModel):
+    """更新角色基礎數值"""
+    base_hp: Optional[int] = None
+    base_mp: Optional[int] = None
+    base_atk: Optional[int] = None
+    base_spd: Optional[int] = None
+    base_def: Optional[int] = None
+
 class CharTempData(BaseModel):
     """
     主要的回應 Schema，包含所有基本欄位以及資料庫生成的 'id'。

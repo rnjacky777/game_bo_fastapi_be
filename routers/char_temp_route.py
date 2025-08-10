@@ -2,7 +2,7 @@ import logging
 from typing import Optional
 from sqlalchemy.exc import IntegrityError
 from core_system.services.char_temp_service import create_char_temp, delete_char_temp, fetch_char_temps, get_char_temp, update_char_temp
-from schemas.char_temp import CharTempCreate, CharTempData, CharTempResponse, CharTempUpdate, ListCharTempResponse
+from schemas.char_temp import CharTempCreate, CharTempData, CharTempInfoUpdate, CharTempResponse, CharTempStatsUpdate, CharTempUpdate, ListCharTempResponse
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 from dependencies.db import get_db
@@ -44,6 +44,8 @@ def create_char_template(char_data: CharTempCreate, db: Session = Depends(get_db
 
 @router.get("/", response_model=ListCharTempResponse)
 def list_char_templates(
+    id: Optional[int] = Query(None, description="角色模板ID，精確搜尋"),
+    name: Optional[str] = Query(None, description="名稱模糊搜尋"),
     prev_id: Optional[int] = Query(None),
     next_id: Optional[int] = Query(None, description="從此 ID 之後的項目"),
     limit: int = Query(20, ge=1, le=100, description="每頁項目數"),
@@ -53,7 +55,7 @@ def list_char_templates(
     started_id = prev_id if prev_id else next_id
     fetch_limit = limit + 1
 
-    chars = fetch_char_temps(db, started_id, fetch_limit, direction)
+    chars = fetch_char_temps(db, started_id, fetch_limit, direction, id=id, name=name)
     has_more = len(chars) == fetch_limit
 
     if has_more:
@@ -61,11 +63,9 @@ def list_char_templates(
 
     if chars:
         char_ids = [char.id for char in chars]
-        logging.debug(
-            f"Fetched character template IDs for the response: {char_ids}")
+        logging.debug(f"Fetched character template IDs for the response: {char_ids}")
     else:
-        logging.debug(
-            "No character templates to return for the given criteria.")
+        logging.debug("No character templates to return for the given criteria.")
 
     last_id = chars[-1].id if len(chars) >= limit else None
 
@@ -75,10 +75,10 @@ def list_char_templates(
             CharTempData(
                 id=char.id,
                 name=char.name,
-                rarity=char.rarity,  # 如果有這些欄位
+                rarity=char.rarity,
             ) for char in chars
         ],
-        # has_more = has_more
+        # has_more=has_more
     )
 
 
@@ -114,3 +114,30 @@ def delete_char_template(char_id: int, db: Session = Depends(get_db)):
     except Exception:
         db.rollback()
         raise HTTPException(status_code=500, detail="刪除失敗")
+
+@router.patch("/info/{char_id}", response_model=CharTempResponse)
+def update_char_info(char_id: int, char_data: CharTempInfoUpdate, db: Session = Depends(get_db)):
+    char = get_char_temp(db, char_id)
+    for field, value in char_data.dict(exclude_unset=True).items():
+        setattr(char, field, value)
+    try:
+        db.commit()
+        db.refresh(char)
+        return char
+    except Exception:
+        db.rollback()
+        raise HTTPException(status_code=500, detail="更新失敗")
+
+
+@router.patch("/stats/{char_id}", response_model=CharTempResponse)
+def update_char_stats(char_id: int, char_data: CharTempStatsUpdate, db: Session = Depends(get_db)):
+    char = get_char_temp(db, char_id)
+    for field, value in char_data.dict(exclude_unset=True).items():
+        setattr(char, field, value)
+    try:
+        db.commit()
+        db.refresh(char)
+        return char
+    except Exception:
+        db.rollback()
+        raise HTTPException(status_code=500, detail="更新失敗")
