@@ -1,53 +1,62 @@
-from pydantic import BaseModel, ConfigDict
-from typing import Optional
+from typing import List, Optional
 
+from pydantic import BaseModel, ConfigDict, Field
+
+
+# ===================================================================
+#   Base & Shared Schemas
+# ===================================================================
 
 class CharTempBase(BaseModel):
-    """基本角色模板，包含所有共享的欄位。"""
-    name: str
-    rarity: int
-    description: Optional[str] = None
-    image_sm_url: Optional[str] = None
-    image_lg_url: Optional[str] = None
-    base_hp: int
-    base_mp: int
-    base_atk: int
-    base_spd: int
-    base_def: int
+    """角色模板的基礎欄位，用於繼承。"""
+    name: str = Field(..., description="角色模板名稱")
+    rarity: int = Field(..., description="稀有度 (例如 1-6 星)")
+    description: Optional[str] = Field(None, description="角色介紹")
+    image_sm_url: Optional[str] = Field(None, description="角色小圖 URL")
+    image_lg_url: Optional[str] = Field(None, description="角色大圖 URL")
+    base_hp: int = Field(..., description="基礎生命值")
+    base_mp: int = Field(..., description="基礎魔力值")
+    base_atk: int = Field(..., description="基礎攻擊力")
+    base_spd: int = Field(..., description="基礎速度")
+    base_def: int = Field(..., description="基礎防禦力")
 
 
-class CharTempCreate(CharTempBase):
-    """用於建立新角色模板的 Schema。"""
-    pass
+# ===================================================================
+#   Schemas for API Responses
+# ===================================================================
 
-
-class CharTempUpdate(BaseModel):
-    """用於更新現有角色模板的 Schema，所有欄位皆為可選。"""
-    name: Optional[str] = None
-    rarity: Optional[int] = None
-    description: Optional[str] = None
-    image_sm_url: Optional[str] = None
-    image_lg_url: Optional[str] = None
-    base_hp: Optional[int] = None
-    base_mp: Optional[int] = None
-    base_atk: Optional[int] = None
-    base_spd: Optional[int] = None
-    base_def: Optional[int] = None
-
-
-class CharTempResponse(CharTempBase):
-    """
-    主要的回應 Schema，包含所有基本欄位以及資料庫生成的 'id'。
-    為了保持 API 的一致性，此模型用於單一查詢、列表、建立和更新的回應。
-    """
+class CharTempData(BaseModel):
+    """用於角色模板列表的精簡資料結構。"""
     id: int
     name: str
+    rarity: int
 
     model_config = ConfigDict(from_attributes=True)
 
-# --- Schema ---
+
+class ListCharTempResponse(BaseModel):
+    """GET /char-templates/ 的回應模型。"""
+    last_id: Optional[int] = None
+    char_temp_list: List[CharTempData] = []
+
+
+class CharTempResponse(CharTempBase):
+    """用於單一角色模板查詢、建立、更新的完整回應模型。"""
+    id: int
+    model_config = ConfigDict(from_attributes=True)
+
+
+# ===================================================================
+#   Schemas for API Requests (Create/Update)
+# ===================================================================
+
+class CharTempCreate(CharTempBase):
+    """POST /char-templates/ 的請求模型，用於建立新角色模板。"""
+    pass
+
+
 class CharTempInfoUpdate(BaseModel):
-    """更新角色一般資訊"""
+    """PATCH /char-templates/info/{id} 的請求模型，用於更新角色一般資訊。"""
     name: Optional[str] = None
     rarity: Optional[int] = None
     description: Optional[str] = None
@@ -56,26 +65,9 @@ class CharTempInfoUpdate(BaseModel):
 
 
 class CharTempStatsUpdate(BaseModel):
-    """更新角色基礎數值"""
+    """PATCH /char-templates/stats/{id} 的請求模型，用於更新角色基礎數值。"""
     base_hp: Optional[int] = None
     base_mp: Optional[int] = None
     base_atk: Optional[int] = None
     base_spd: Optional[int] = None
     base_def: Optional[int] = None
-
-class CharTempData(BaseModel):
-    """
-    主要的回應 Schema，包含所有基本欄位以及資料庫生成的 'id'。
-    為了保持 API 的一致性，此模型用於單一查詢、列表、建立和更新的回應。
-    """
-    id: int
-    name: str
-    rarity: int
-
-    model_config = ConfigDict(from_attributes=True)
-
-class ListCharTempResponse(BaseModel):
-    last_id: Optional[int] = None
-    char_temp_list: list[CharTempData] = []
-    # has_more: bool
-

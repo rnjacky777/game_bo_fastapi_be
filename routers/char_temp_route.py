@@ -1,8 +1,8 @@
 import logging
 from typing import Optional
 from sqlalchemy.exc import IntegrityError
-from core_system.services.char_temp_service import create_char_temp, delete_char_temp, fetch_char_temps, get_char_temp, update_char_temp
-from schemas.char_temp import CharTempCreate, CharTempData, CharTempInfoUpdate, CharTempResponse, CharTempStatsUpdate, CharTempUpdate, ListCharTempResponse
+from core_system.services.char_temp_service import create_char_temp, delete_char_temp, fetch_char_temps, get_char_temp
+from schemas.char_temp import CharTempCreate, CharTempData, CharTempInfoUpdate, CharTempResponse, CharTempStatsUpdate, ListCharTempResponse
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 from dependencies.db import get_db
@@ -55,7 +55,8 @@ def list_char_templates(
     started_id = prev_id if prev_id else next_id
     fetch_limit = limit + 1
 
-    chars = fetch_char_temps(db, started_id, fetch_limit, direction, id=id, name=name)
+    chars = fetch_char_temps(db, started_id, fetch_limit,
+                             direction, id=id, name=name)
     has_more = len(chars) == fetch_limit
 
     if has_more:
@@ -63,9 +64,11 @@ def list_char_templates(
 
     if chars:
         char_ids = [char.id for char in chars]
-        logging.debug(f"Fetched character template IDs for the response: {char_ids}")
+        logging.debug(
+            f"Fetched character template IDs for the response: {char_ids}")
     else:
-        logging.debug("No character templates to return for the given criteria.")
+        logging.debug(
+            "No character templates to return for the given criteria.")
 
     last_id = chars[-1].id if len(chars) >= limit else None
 
@@ -90,20 +93,6 @@ def get_char_template(char_id: int, db: Session = Depends(get_db)):
     return char
 
 
-@router.put("/{char_id}", response_model=CharTempResponse)
-def update_char_template(char_id: int, char_data: CharTempUpdate, db: Session = Depends(get_db)):
-    char = update_char_temp(db, char_id, char_data)
-    if not char:
-        raise HTTPException(status_code=404, detail="角色模板不存在")
-    try:
-        db.commit()
-        db.refresh(char)
-        return char
-    except Exception:
-        db.rollback()
-        raise HTTPException(status_code=500, detail="更新失敗")
-
-
 @router.delete("/{char_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_char_template(char_id: int, db: Session = Depends(get_db)):
     char = delete_char_temp(db, char_id)
@@ -114,6 +103,7 @@ def delete_char_template(char_id: int, db: Session = Depends(get_db)):
     except Exception:
         db.rollback()
         raise HTTPException(status_code=500, detail="刪除失敗")
+
 
 @router.patch("/info/{char_id}", response_model=CharTempResponse)
 def update_char_info(char_id: int, char_data: CharTempInfoUpdate, db: Session = Depends(get_db)):
