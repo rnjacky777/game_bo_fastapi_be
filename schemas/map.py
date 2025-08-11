@@ -182,3 +182,33 @@ class EventAssociationOut(BaseModel):
 class MessageResponse(BaseModel):
     """通用的訊息回應模型"""
     message: str
+
+class MapAreaCreate(BaseModel):
+    map_id: int
+    name: str
+    description: str | None = None
+    image_url: str | None = None
+
+class MapAreaUpdate(BaseModel):
+    name: str | None = None
+    description: str | None = None
+    image_url: str | None = None
+
+class NPCInfo(BaseModel):
+    npc_id: int
+    npc_name: str
+    npc_role: str
+
+class EventAssociationOut(BaseModel):
+    event_id: int
+    event_name: str
+    probability: float
+
+class MapAreaOut(BaseModel):
+    id: int
+    map_id: int
+    name: str
+    description: Optional[str]
+    image_url: Optional[str]
+    init_npc: Optional[List[NPCInfo]]
+    event_associations: List[EventAssociationOut]
