@@ -8,8 +8,10 @@ from schemas.monster import AddMonsterRequest, EditMonsterRequest, GetMonsterDet
 from core_system.services.monster_service import fetch_monsters, get_monster_by_id
 from core_system.services.reward_pool_service import add_reward_pool, remove_reward_pool
 
-
-router = APIRouter()
+router = APIRouter(
+    prefix="/monsters",
+    tags=["Monsters"]
+)
 
 
 @router.get("/ListAllMonsters", response_model=List[MonsterSchema])

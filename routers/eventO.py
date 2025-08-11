@@ -18,7 +18,10 @@ from core_system.services.reward_pool_service import (
     add_reward_pool, add_reward_pool_item, edit_reward_pool_item, remove_reward_pool_item
 )
 
-router = APIRouter()
+router = APIRouter(
+    prefix="/events",
+    tags=["Events"]
+)
 
 # -------------------------- Event APIs -------------------------- #
 
