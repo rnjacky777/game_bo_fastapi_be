@@ -8,6 +8,7 @@ from sqlalchemy.exc import IntegrityError
 from dependencies.db import get_db
 from core_system.models.maps import MapArea
 from core_system.services.map_area_service import (
+    create_map_area_service,
     delete_map_area_service,
     get_area_or_raise,
     patch_map_area_basic_service,
@@ -40,8 +41,6 @@ def create_map_area(
     db: Session = Depends(get_db),
 ):
     """在指定的地圖下建立一個新的地圖區域。"""
-    from core_system.services.map_service import create_map_area_service
-
     try:
         new_area = create_map_area_service(
             db=db,

@@ -49,6 +49,8 @@ router = APIRouter(prefix="/maps", tags=["Maps"])
 """,
 )
 def get_map_list(
+    id: Optional[int] = Query(None, description="地圖 ID，精確搜尋"),
+    name: Optional[str] = Query(None, description="地圖名稱模糊搜尋"),
     prev_id: Optional[int] = Query(None),
     next_id: Optional[int] = Query(None, description="從此 ID 之後的項目"),
     limit: int = Query(20, ge=1, le=100, description="每頁項目數"),
@@ -59,9 +61,17 @@ def get_map_list(
 
     direction = "prev" if prev_id is not None else "next"
     cursor = prev_id if prev_id is not None else next_id
+    fetch_limit = limit + 1
 
-    maps, next_cursor, prev_cursor, has_more = fetch_maps(
-        db, cursor, limit, direction)
+    # 假設 fetch_maps 支援 id 和 name 參數過濾，你要修改 fetch_maps 接受這兩參數
+    maps = fetch_maps(db, cursor, fetch_limit, direction, id=id, name=name)
+    has_more = len(maps) == fetch_limit
+
+    if has_more:
+        maps.pop()
+
+    next_cursor = maps[-1].id if has_more and direction == "next" else None
+    prev_cursor = maps[0].id if has_more and direction == "prev" else None
 
     return ListMapsResponse(
         next_cursor=next_cursor,
@@ -215,6 +225,7 @@ def patch_map_connections(
     session: Session = Depends(get_db),
 ):
     try:
+        logging.debug('Go into router')
         patch_map_connections_service(
             db=session,
             map_id=map_id,
@@ -237,13 +248,23 @@ def patch_map_connections(
     neighbors_out: List[MapNeighborOut] = []
     for conn in map_obj.connections_a:
         neighbors_out.append(
-            MapNeighborOut.model_validate(
-                conn.map_b, context={"connection": conn})
+            MapNeighborOut(
+                id=conn.id,
+                name=conn.map_a.name,
+                is_locked = conn.is_locked,
+                required_level = conn.required_level,
+                required_item = conn.required_item
+                )
         )
     for conn in map_obj.connections_b:
         neighbors_out.append(
-            MapNeighborOut.model_validate(
-                conn.map_a, context={"connection": conn})
+            MapNeighborOut(
+                id=conn.id,
+                name=conn.map_b.name,
+                is_locked = conn.is_locked,
+                required_level = conn.required_level,
+                required_item = conn.required_item
+                )
         )
 
     return neighbors_out
