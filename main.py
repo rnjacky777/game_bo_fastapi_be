@@ -9,10 +9,11 @@ from routers import (
     eventO,
     itemO,
     loginO,
-    mapO,
+    map_router,
     monsterO,
     monsterRewardO,
     userO,
+    map_area_router
 )
 import logging
 load_dotenv()
@@ -45,8 +46,9 @@ app.include_router(monsterO.router)
 app.include_router(monsterRewardO.router)
 app.include_router(itemO.router)
 app.include_router(eventO.router)
-app.include_router(mapO.router)
+app.include_router(map_router.router)
 app.include_router(char_temp_route.router)
+app.include_router(map_area_router.router)
 
 # BO
 # app.include_router(router=users.router,prefix="/admin/users")

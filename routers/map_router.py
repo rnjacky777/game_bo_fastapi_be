@@ -4,7 +4,7 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, Query, HTTPException
 from sqlalchemy.orm import Session
 
-from core_system.models.maps import Map, MapArea
+from core_system.models.maps import Map
 from core_system.services.map_service import (
     create_maps_service,
     delete_map_service,
@@ -15,6 +15,7 @@ from core_system.services.map_service import (
     update_map_event_associations,
 )
 from dependencies.db import get_db
+from schemas.common import MessageResponse
 from schemas.map import (
     ConnectionsUpdate,
     CreateMapRequest,
@@ -23,11 +24,11 @@ from schemas.map import (
     EventAssociationOut,
     EventAssociationsUpdate,
     ListMapsResponse,
+    MapAreaData,
     MapData,
     MapNeighborOut,
     MapOut,
-    MapUpdate,
-    MessageResponse,
+    MapUpdate
 )
 
 router = APIRouter(prefix="/maps", tags=["Maps"])
@@ -48,6 +49,8 @@ router = APIRouter(prefix="/maps", tags=["Maps"])
 """,
 )
 def get_map_list(
+    id: Optional[int] = Query(None, description="地圖 ID，精確搜尋"),
+    name: Optional[str] = Query(None, description="地圖名稱模糊搜尋"),
     prev_id: Optional[int] = Query(None),
     next_id: Optional[int] = Query(None, description="從此 ID 之後的項目"),
     limit: int = Query(20, ge=1, le=100, description="每頁項目數"),
@@ -58,8 +61,17 @@ def get_map_list(
 
     direction = "prev" if prev_id is not None else "next"
     cursor = prev_id if prev_id is not None else next_id
+    fetch_limit = limit + 1
 
-    maps, next_cursor, prev_cursor, has_more = fetch_maps(db, cursor, limit, direction)
+    # 假設 fetch_maps 支援 id 和 name 參數過濾，你要修改 fetch_maps 接受這兩參數
+    maps = fetch_maps(db, cursor, fetch_limit, direction, id=id, name=name)
+    has_more = len(maps) == fetch_limit
+
+    if has_more:
+        maps.pop()
+
+    next_cursor = maps[-1].id if has_more and direction == "next" else None
+    prev_cursor = maps[0].id if has_more and direction == "prev" else None
 
     return ListMapsResponse(
         next_cursor=next_cursor,
@@ -73,6 +85,21 @@ def get_map_list(
             for m in maps
         ],
     )
+
+
+@router.get(
+    "/{map_id}",
+    response_model=MapOut,
+    summary="取得單一地圖詳細資訊",
+    description="根據地圖 ID 獲取其詳細資料，包含相鄰的地圖及其連線狀態與事件。",  # 擴充說明
+    responses={404: {"description": "找不到指定 ID 的地圖"}},
+)
+def get_map_details(map_id: int, db: Session = Depends(get_db)):
+    map_obj = get_map_by_id(db=db, map_id=map_id)
+    if not map_obj:
+        raise HTTPException(status_code=404, detail="Map not found")
+
+    return build_map_out_response(map_obj)
 
 
 @router.post(
@@ -91,21 +118,6 @@ def create_map(data: CreateMapRequest, db: Session = Depends(get_db)):
 
     created_maps = [CreatedMapInfo(id=c.id, name=c.name) for c in created]
     return CreateMapResponse(message="Maps created successfully", created_maps=created_maps)
-
-
-@router.get(
-    "/{map_id}",
-    response_model=MapOut,
-    summary="取得單一地圖詳細資訊",
-    description="根據地圖 ID 獲取其詳細資料，包含相鄰的地圖及其連線狀態與事件。",  # 擴充說明
-    responses={404: {"description": "找不到指定 ID 的地圖"}},
-)
-def get_map_details(map_id: int, db: Session = Depends(get_db)):
-    map_obj = get_map_by_id(db=db, map_id=map_id)
-    if not map_obj:
-        raise HTTPException(status_code=404, detail="Map not found")
-
-    return build_map_out_response(map_obj)
 
 
 # -------------------------- Map Feature APIs -------------------------- #
@@ -135,7 +147,8 @@ def update_map_events(
         dto_list = update_map_event_associations(
             db=session,
             map_id=map_id,
-            upsert=[{"event_id": e.event_id, "probability": e.probability} for e in (payload.upsert or [])],
+            upsert=[{"event_id": e.event_id, "probability": e.probability}
+                    for e in (payload.upsert or [])],
             remove=payload.remove,
             normalize=payload.normalize or False,
         )
@@ -212,6 +225,7 @@ def patch_map_connections(
     session: Session = Depends(get_db),
 ):
     try:
+        logging.debug('Go into router')
         patch_map_connections_service(
             db=session,
             map_id=map_id,
@@ -228,16 +242,29 @@ def patch_map_connections(
 
     map_obj = get_map_by_id(db=session, map_id=map_id)
     if not map_obj:
-        raise HTTPException(status_code=404, detail="Map not found after update")
+        raise HTTPException(
+            status_code=404, detail="Map not found after update")
 
     neighbors_out: List[MapNeighborOut] = []
     for conn in map_obj.connections_a:
         neighbors_out.append(
-            MapNeighborOut.model_validate(conn.map_b, context={"connection": conn})
+            MapNeighborOut(
+                id=conn.id,
+                name=conn.map_a.name,
+                is_locked = conn.is_locked,
+                required_level = conn.required_level,
+                required_item = conn.required_item
+                )
         )
     for conn in map_obj.connections_b:
         neighbors_out.append(
-            MapNeighborOut.model_validate(conn.map_a, context={"connection": conn})
+            MapNeighborOut(
+                id=conn.id,
+                name=conn.map_b.name,
+                is_locked = conn.is_locked,
+                required_level = conn.required_level,
+                required_item = conn.required_item
+                )
         )
 
     return neighbors_out
@@ -299,6 +326,15 @@ def build_map_out_response(map_obj: Map) -> MapOut:
             )
         )
 
+    map_areas_out: List[MapAreaData] = []
+    for map_areas in map_obj.areas:
+        map_areas_out.append(
+            MapAreaData(
+                id=map_areas.id,
+                name=map_areas.name
+            )
+        )
+
     return MapOut(
         id=map_obj.id,
         name=map_obj.name,
@@ -306,32 +342,7 @@ def build_map_out_response(map_obj: Map) -> MapOut:
         image_url=map_obj.image_url,
         neighbors=neighbors_out,
         events=events_out,
+        map_areas=map_areas_out
     )
 
 
-# for test
-
-from pydantic import BaseModel
-class MapAreaCreate(BaseModel):
-    map_id: int
-    name: str
-    description: str | None = None
-    image_url: str | None = None
-
-@router.post("/map-areas", summary="新增一筆地區")
-def create_map_area(map_area: MapAreaCreate, db: Session = Depends(get_db)):
-    new_area = MapArea(
-        map_id=map_area.map_id,
-        name=map_area.name,
-        description=map_area.description,
-        image_url=map_area.image_url
-    )
-    db.add(new_area)
-    try:
-        db.commit()
-        db.refresh(new_area)
-    except Exception as e:
-        db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
-
-    return {"message": "地區新增成功", "id": new_area.id}
