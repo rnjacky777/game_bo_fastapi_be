@@ -7,14 +7,11 @@ from sqlalchemy.orm import Session
 from core_system.models.maps import Map
 from core_system.services.map_service import (
     create_maps_service,
-    delete_map_area_service,
     delete_map_service,
     fetch_maps,
     get_map_by_id,
-    patch_map_area_basic_service,
     patch_map_basic_service,
     patch_map_connections_service,
-    update_map_area_event_associations,
     update_map_event_associations,
 )
 from dependencies.db import get_db
